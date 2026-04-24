@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>BFHL Solver</title>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial;
+      background: linear-gradient(135deg, #1e293b, #0f172a);
+      color: #fff;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 20px;
+    }
+
+    h1 {
+      text-align: center;
+      color: #38bdf8;
+    }
+
+    .card {
+      background: #1e293b;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    }
+
+    textarea {
+      width: 100%;
+      height: 100px;
+      border-radius: 8px;
+      border: none;
+      padding: 10px;
+    }
+
+    button {
+      margin-top: 10px;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      background: #38bdf8;
+      color: black;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .section {
+      margin-top: 20px;
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 5px 10px;
+      margin: 5px;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+
+    .invalid { background: #ef4444; }
+    .duplicate { background: #f59e0b; }
+
+    .tree {
+      margin-top: 10px;
+      padding-left: 20px;
+      border-left: 2px solid #38bdf8;
+    }
+
+    .node {
+      margin: 5px 0;
+    }
+
+    .summary {
+      background: #020617;
+      padding: 10px;
+      border-radius: 6px;
+    }
+    
+     .tree-list {
+  list-style: none;
+  padding-left: 20px;
+  position: relative;
+}
+
+.tree-list li {
+  position: relative;
+  padding-left: 14px;
+  margin: 4px 0;
+  font-family: monospace;
+}
+
+.tree-list li::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 10px;
+  width: 10px;
+  height: 1px;
+  background: #38bdf8;
+}
+
+.tree-list li::after {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  background: #38bdf8;
+}
+
+.tree-list li:last-child::after {
+  height: 12px;
+}
+
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+  <h1>BFHL Hierarchy Processor</h1>
+
+  <div class="card">
+    <textarea id="input">A->B,A->C,B->D</textarea>
+    <button onclick="send()">Process</button>
+
+    <div class="section" id="trees"></div>
+    <div class="section" id="errors"></div>
+    <div class="section" id="summary"></div>
+  </div>
+</div>
+
+<script>
+async function send() {
+  let input = document.getElementById("input").value;
+  let data = input.split(",");
+
+  const res = await fetch("http://localhost:3000/bfhl", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ data })
+  });
+
+  const json = await res.json();
+
+  renderTrees(json.hierarchies);
+  renderErrors(json.invalid_entries, json.duplicate_edges);
+  renderSummary(json.summary);
+}
+
+function renderTrees(hierarchies) {
+  let container = document.getElementById("trees");
+  container.innerHTML = "<h3>Trees</h3>";
+
+  hierarchies.forEach(h => {
+    let div = document.createElement("div");
+
+    if (h.has_cycle) {
+      div.innerHTML = `<b>Root: ${h.root}</b> (Cycle detected)`;
+    } else {
+      div.innerHTML = `<b>Root: ${h.root}</b> (Depth: ${h.depth})`;
+     const wrapper = document.createElement("div");
+    wrapper.style.marginTop = "8px";
+    wrapper.appendChild(buildTree(h.tree[h.root]));
+    div.appendChild(wrapper);
+    }
+
+    container.appendChild(div);
+  });
+}
+
+function buildTree(obj) {
+  const ul = document.createElement("ul");
+  ul.className = "tree-list";
+
+  for (let key in obj) {
+    const li = document.createElement("li");
+    li.textContent = key;
+
+    if (Object.keys(obj[key]).length > 0) {
+      li.appendChild(buildTree(obj[key]));
+    }
+
+    ul.appendChild(li);
+  }
+
+  return ul;
+}
+
+function renderErrors(invalid, duplicates) {
+  let container = document.getElementById("errors");
+  container.innerHTML = "<h3>Issues</h3>";
+
+  if (invalid.length === 0 && duplicates.length === 0) {
+    container.innerHTML += "<p style='color:#22c55e'>No issues found</p>";
+    return;
+  }
+
+  invalid.forEach(i => {
+    container.innerHTML += `<span class="tag invalid">${i}</span>`;
+  });
+
+  duplicates.forEach(d => {
+    container.innerHTML += `<span class="tag duplicate">${d}</span>`;
+  });
+}
+
+function renderSummary(summary) {
+  let container = document.getElementById("summary");
+  container.innerHTML = `
+    <h3>Summary</h3>
+    <div class="summary">
+      Trees: ${summary.total_trees} <br>
+      Cycles: ${summary.total_cycles} <br>
+      Largest Root: ${summary.largest_tree_root}
+    </div>
+  `;
+}
+</script>
+
+</body>
+</html>
